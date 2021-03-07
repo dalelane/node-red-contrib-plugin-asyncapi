@@ -1,0 +1,14 @@
+{
+  "name": "node-red-contrib-plugin-asyncapi",
+  "version": "0.0.1",
+  "description": "Creates and configures nodes based on AsyncAPI specs",
+  "author": "Dale Lane",
+  "node-red": {
+    "plugins": {
+      "asyncapi-plugin": "asyncapi-plugin.html"
+    }
+  },
+  "dependencies": {
+    "@asyncapi/parser": "^1.4.0"
+  }
+}

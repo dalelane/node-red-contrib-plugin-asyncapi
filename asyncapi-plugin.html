@@ -1,0 +1,29 @@
+<script type="text/javascript">
+    (function() {
+        var PLUGIN_ID = "node-red-contrib-plugin-asyncapi";
+        var SIDEBAR_ID = PLUGIN_ID + "-sidebar-tab";
+        var ACTION_ID = "core:show-asyncapi-sidebar-tab";
+
+
+        RED.plugins.registerPlugin(PLUGIN_ID, {
+            onadd: function() {
+                var placeholder = $("<div/>").css({"position":"relative","height":"100%"});
+
+                // register an action to allow keyboard shortcuts to show the plugin sidebar
+                RED.actions.add(ACTION_ID, function () {
+                    RED.sidebar.show(SIDEBAR_ID);
+                });
+
+                // add an AsyncAPI tab to the sidebar that can be used to display the plugin
+                RED.sidebar.addTab({
+                    id: SIDEBAR_ID,
+                    name: "AsyncAPI plugin",
+                    label: "AsyncAPI",
+                    iconClass: "fa fa-plus-circle",
+                    content: placeholder,
+                    action: ACTION_ID
+                });
+            }
+        });
+    })();
+</script>
