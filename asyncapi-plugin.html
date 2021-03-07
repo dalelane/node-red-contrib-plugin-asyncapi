@@ -14,6 +14,9 @@
         var currentAsyncApiSpec;
         var currentAsyncApiControls = {};
 
+        //
+        // -----------------------------------------------------------
+        //
 
         function fetchAsyncApiSpec() {
             return AsyncAPIParser.parseFromUrl(currentAsyncApiSpecUrl)
@@ -23,6 +26,65 @@
                     currentAsyncApiControls = {};
                 });
         }
+
+        function getKafkaBrokerConfigId(serverSpec) {
+            var bootstrap = serverSpec.url();
+
+            // check if there is already a config for this
+            //  broker we can reuse before creating a new one
+            var brokerConfigId;
+            RED.nodes.eachConfig(function (cfg) {
+                if (cfg.type === 'kafka-broker' && cfg.broker === bootstrap) {
+                    brokerConfigId = cfg.id;
+                }
+            });
+
+            if (!brokerConfigId) {
+                RED.view.importNodes({
+                    broker : serverSpec.url(),
+                    type : 'kafka-broker'
+                }, {
+                    generateIds : true,
+                    touchImport : true
+                });
+                // easiest way to find the id for the config
+                //  node we've just generated is to call this
+                //  function again
+                return getKafkaBrokerConfigId(serverSpec);
+            }
+
+            return brokerConfigId;
+        }
+
+        function createKafkaNodeSpec(serverSpec, channelName, operationName) {
+            return {
+                cgroup : 'node-red-rdkafka',
+                type : operationName === 'subscribe' ? 'rdkafka in' : 'rdkafka out',
+
+                broker: getKafkaBrokerConfigId(serverSpec),
+                topic : channelName,
+                autocommit : true
+            };
+        }
+
+        function createNodeSpec() {
+            var serverName = currentAsyncApiControls.server.val();
+            var channelName = currentAsyncApiControls.channel.val();
+            var operationName = currentAsyncApiControls.operation.val();
+
+            var serverSpec = currentAsyncApiSpec.servers()[serverName];
+            if (serverSpec.protocol() === 'kafka') {
+                return createKafkaNodeSpec(serverSpec, channelName, operationName);
+            }
+            else {
+                console.error('Unsupported AsyncAPI protocol: ' + serverSpec.protocol());
+            }
+        }
+
+
+        //
+        // -----------------------------------------------------------
+        //
 
         function generateSummaryTableRow(key, val) {
             return '<tr class="red-ui-help-info-row">' +
@@ -45,6 +107,11 @@
                     '<hr>';
         }
 
+        function handleChannelSelection(channelname) {
+            currentAsyncApiControls['subscribe'].prop('disabled', !currentAsyncApiSpec.channels()[channelname].hasSubscribe());
+            currentAsyncApiControls['publish'].prop('disabled', !currentAsyncApiSpec.channels()[channelname].hasPublish());
+        }
+
         function createSpecControl(type) {
             var controlDiv = $("<div/>");
 
@@ -63,16 +130,54 @@
                     var channelSpec = currentAsyncApiSpec.channels()[channelname];
                     currentAsyncApiControls[type].append('<option value="' + channelname + '">' + channelname + '</option>');
                 }
+
+                currentAsyncApiControls[type].on('change', function () {
+                    handleChannelSelection(currentAsyncApiControls[type].val());
+                });
+            }
+            else if (type === 'operation') {
+                currentAsyncApiControls.subscribe = $('<option value="subscribe">subscribe</option>');
+                currentAsyncApiControls[type].append(currentAsyncApiControls.subscribe);
+
+                currentAsyncApiControls.publish = $('<option value="publish">publish</option>');
+                currentAsyncApiControls[type].append(currentAsyncApiControls.publish);
             }
 
             return controlDiv;
         }
 
+        function createGenerateButton() {
+            currentAsyncApiControls.generate = $("<input type='button' class='red-ui-button' value='generate'>");
+            currentAsyncApiControls.generate.on('click', function () {
+                RED.view.importNodes(createNodeSpec(), {
+                    generateIds : true,
+                    touchImport : true
+                });
+            });
+            return currentAsyncApiControls.generate;
+        }
+
         function handleNewAsyncApiSpec(apiSpecBody) {
+            // clean up any existing form
+            if (currentAsyncApiControls.channel) {
+                currentAsyncApiControls.channel.off('change');
+            }
+            if (currentAsyncApiControls.generate) {
+                currentAsyncApiControls.generate.off('click');
+            }
             apiSpecBody.empty();
+
+            // create new form
             apiSpecBody.html(generateApiSpecSummary()).show();
             createSpecControl('server').appendTo(apiSpecBody);
             createSpecControl('channel').appendTo(apiSpecBody);
+            createSpecControl('operation').appendTo(apiSpecBody);
+
+            if (currentAsyncApiSpec.channelNames().length > 0) {
+                handleChannelSelection(currentAsyncApiSpec.channelNames()[0]);
+            }
+
+            createGenerateButton().appendTo(apiSpecBody);
         }
 
         function displayAsyncApiSpecError(errorBody, err) {
@@ -157,6 +262,11 @@
 
             return sidebarDiv;
         }
+
+
+        //
+        // -----------------------------------------------------------
+        //
 
 
         RED.plugins.registerPlugin(PLUGIN_ID, {
