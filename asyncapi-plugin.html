@@ -4,11 +4,67 @@
         var SIDEBAR_ID = PLUGIN_ID + "-sidebar-tab";
         var ACTION_ID = "core:show-asyncapi-sidebar-tab";
 
+        var currentAsyncApiSpecUrl;
+
+
+
+        function createSidebarHtml() {
+            var sidebarDiv = $("<div/>").css({"position":"relative","height":"100%"});
+
+            //
+            // header - where the user provides the address of an AsyncAPI spec to use
+            //
+
+            var sidebarHeader = $("<div/>", { "class" : "red-ui-sidebar-header red-ui-info-toolbar red-ui-searchBox-compact" });
+            sidebarDiv.append(sidebarHeader);
+
+            var sidebarHeaderForm = $('<form class="red-ui-searchBox-form"/>');
+            var asyncApiSpecUrlInput = $('<input type="text" class="red-ui-searchBox-input" placeholder="URL for AsyncAPI specification" style="width: 100%;">');
+            asyncApiSpecUrlInput.appendTo(sidebarHeaderForm);
+
+            sidebarHeaderForm.appendTo(sidebarHeader);
+
+            //
+            // body - where details of the entered AsyncAPI spec are displayed
+            //
+
+            var body = $('<div style="padding: 10px"/>').appendTo(sidebarDiv);
+            var initialBody = $("<div>Provide the URL of an AsyncAPI specification file in the text box above to start generating nodes</div>");
+            var apiSpecBody = $("<div>PLACEHOLDER : AsyncAPI specification provided!</div>").hide();
+
+            initialBody.appendTo(body);
+            apiSpecBody.appendTo(body);
+
+            //
+            // actions
+            //
+
+            // action: user provides the URL of an AsyncAPI spec
+            asyncApiSpecUrlInput.on('keydown', function (e) {
+                if (// user has pressed enter
+                    e.which === 13 &&
+                    // they've changed the URL of the spec they want to use
+                    currentAsyncApiSpecUrl !== asyncApiSpecUrlInput.val())
+                {
+                    currentAsyncApiSpecUrl = asyncApiSpecUrlInput.val().trim();
+
+                    if (currentAsyncApiSpecUrl) {
+                        initialBody.hide();
+                        apiSpecBody.show();
+                    }
+                    else {
+                        initialBody.show();
+                        apiSpecBody.hide();
+                    }
+                }
+            });
+
+            return sidebarDiv;
+        }
+
 
         RED.plugins.registerPlugin(PLUGIN_ID, {
             onadd: function() {
-                var placeholder = $("<div/>").css({"position":"relative","height":"100%"});
-
                 // register an action to allow keyboard shortcuts to show the plugin sidebar
                 RED.actions.add(ACTION_ID, function () {
                     RED.sidebar.show(SIDEBAR_ID);
@@ -20,7 +76,7 @@
                     name: "AsyncAPI plugin",
                     label: "AsyncAPI",
                     iconClass: "fa fa-plus-circle",
-                    content: placeholder,
+                    content: createSidebarHtml(),
                     action: ACTION_ID
                 });
             }
