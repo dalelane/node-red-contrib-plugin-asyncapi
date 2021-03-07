@@ -34,7 +34,7 @@
             //  broker we can reuse before creating a new one
             var brokerConfigId;
             RED.nodes.eachConfig(function (cfg) {
-                if (cfg.type === 'kafka-broker' && cfg.broker === bootstrap) {
+                if (cfg.type === 'kafka-broker-secure' && cfg.broker === bootstrap) {
                     brokerConfigId = cfg.id;
                 }
             });
@@ -42,7 +42,7 @@
             if (!brokerConfigId) {
                 RED.view.importNodes({
                     broker : serverSpec.url(),
-                    type : 'kafka-broker'
+                    type : 'kafka-broker-secure'
                 }, {
                     generateIds : true,
                     touchImport : true
@@ -58,8 +58,8 @@
 
         function createKafkaNodeSpec(serverSpec, channelName, operationName) {
             return {
-                cgroup : 'node-red-rdkafka',
-                type : operationName === 'subscribe' ? 'rdkafka in' : 'rdkafka out',
+                cgroup : 'node-red-rdkafka-secure',
+                type : operationName === 'subscribe' ? 'rdkafka-secure in' : 'rdkafka-secure out',
 
                 broker: getKafkaBrokerConfigId(serverSpec),
                 topic : channelName,
