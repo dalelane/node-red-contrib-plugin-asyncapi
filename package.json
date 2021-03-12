@@ -9,6 +9,7 @@
     }
   },
   "dependencies": {
+    "@asyncapi/avro-schema-parser": "^0.2.0",
     "@asyncapi/parser": "^1.4.0"
   }
 }

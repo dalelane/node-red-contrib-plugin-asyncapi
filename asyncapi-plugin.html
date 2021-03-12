@@ -27,9 +27,25 @@
                 });
         }
 
-        function getKafkaBrokerConfigId(serverSpec) {
-            var bootstrap = serverSpec.url();
 
+        var COMBINE_ALL_KAFKA_BROKERS = " ( all brokers ) ";
+
+        function generateKafkaBootstrapServers(serverName) {
+            if (serverName === COMBINE_ALL_KAFKA_BROKERS) {
+                // if the user wants to use all brokers, generate a bootstrap
+                //  address from a comma-separated list of all broker's url
+                return currentAsyncApiSpec.serverNames().map(function (name) {
+                    return currentAsyncApiSpec.servers()[name].url();
+                }).join(',');
+            }
+            else {
+                // if the user has chosen a single broker, get it's url
+                var serverSpec = currentAsyncApiSpec.servers()[serverName];
+                return serverSpec.url();
+            }
+        }
+
+        function getKafkaBrokerConfigId(bootstrap) {
             // check if there is already a config for this
             //  broker we can reuse before creating a new one
             var brokerConfigId;
@@ -50,7 +66,7 @@
                 // easiest way to find the id for the config
                 //  node we've just generated is to call this
                 //  function again
-                return getKafkaBrokerConfigId(serverSpec);
+                return getKafkaBrokerConfigId(bootstrap);
             }
 
             return brokerConfigId;
@@ -97,12 +113,12 @@
             return brokerConfigId;
         }
 
-        function createKafkaNodeSpec(serverSpec, channelName, operationName) {
+        function createKafkaNodeSpec(serverName, channelName, operationName) {
             return {
                 cgroup : 'node-red-rdkafka-secure',
                 type : operationName === 'subscribe' ? 'rdkafka-secure in' : 'rdkafka-secure out',
 
-                broker: getKafkaBrokerConfigId(serverSpec),
+                broker: getKafkaBrokerConfigId(generateKafkaBootstrapServers(serverName)),
                 topic : channelName,
                 autocommit : true
             };
@@ -122,9 +138,13 @@
             var channelName = currentAsyncApiControls.channel.val();
             var operationName = currentAsyncApiControls.operation.val();
 
+            if (serverName === COMBINE_ALL_KAFKA_BROKERS) {
+                return createKafkaNodeSpec(serverName, channelName, operationName);
+            }
+
             var serverSpec = currentAsyncApiSpec.servers()[serverName];
             if (serverSpec.protocol() === 'kafka') {
-                return createKafkaNodeSpec(serverSpec, channelName, operationName);
+                return createKafkaNodeSpec(serverName, channelName, operationName);
             }
             else if (serverSpec.protocol() === 'mqtt') {
                 return createMQTTNodeSpec(serverSpec, channelName, operationName);
@@ -144,7 +164,9 @@
                         '<td>' +
                             key +
                         '</td>' +
-                        '<td><span class="red-ui-debug-msg-element red-ui-debug-msg-row red-ui-debug-msg-object-value red-ui-debug-msg-object-header">' +
+                        '<td><span ' +
+                            'style="max-height: 110px; overflow: scroll;" ' +
+                            'class="red-ui-debug-msg-element red-ui-debug-msg-row red-ui-debug-msg-object-value red-ui-debug-msg-object-header">' +
                             val +
                         '</span></td>' +
                     '</tr>';
@@ -154,7 +176,7 @@
             return '<table class="red-ui-info-table">' +
                         '<tbody>' +
                             generateSummaryTableRow("Title", currentAsyncApiSpec.info().title()) +
-                            generateSummaryTableRow("Description", currentAsyncApiSpec.info().description()) +
+                            generateSummaryTableRow("Description", RED.utils.renderMarkdown(currentAsyncApiSpec.info().description())) +
                         '</tbody>' +
                     '</table>' +
                     '<hr>';
@@ -173,9 +195,16 @@
             currentAsyncApiControls[type].appendTo(controlDiv);
 
             if (type === 'server') {
+                var allServersKafka = true;
                 for (var servername of currentAsyncApiSpec.serverNames()) {
                     var serverSpec = currentAsyncApiSpec.servers()[servername];
                     currentAsyncApiControls[type].append('<option value="' + servername + '">' + servername + '</option>');
+                    if (serverSpec.protocol() !== 'kafka' && serverSpec.protocol() === 'kafka-secure') {
+                        allServersKafka = false;
+                    }
+                }
+                if (allServersKafka) {
+                    currentAsyncApiControls[type].prepend('<option value="' + COMBINE_ALL_KAFKA_BROKERS + '" selected=true>' + COMBINE_ALL_KAFKA_BROKERS + '</option>');
                 }
             }
             else if (type === 'channel') {
@@ -234,10 +263,16 @@
         }
 
         function displayAsyncApiSpecError(errorBody, err) {
-            var errMessage = '<div>' +
+            var errMessage;
+            if (err.title && err.detail) {
+                errMessage = '<div>' +
                     '<div style="margin-bottom: 1em;"><strong>' + err.title + '</strong></div>' +
                     '<div>' + err.detail + '</div>' +
                 '</div>';
+            }
+            else {
+                errMessage = '<div>' + err.message + '</div>';
+            }
             errorBody.html(errMessage).show();
         }
 
