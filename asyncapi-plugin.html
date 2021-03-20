@@ -30,6 +30,10 @@
 
         var COMBINE_ALL_KAFKA_BROKERS = " ( all brokers ) ";
 
+        function isKafka(protocol) {
+            return protocol === 'kafka' || protocol === 'kafka-secure';
+        }
+
         function generateKafkaBootstrapServers(serverName) {
             if (serverName === COMBINE_ALL_KAFKA_BROKERS) {
                 // if the user wants to use all brokers, generate a bootstrap
@@ -70,6 +74,10 @@
             }
 
             return brokerConfigId;
+        }
+
+        function isMQTT(protocol) {
+            return protocol === 'mqtt' || protocol === 'secure-mqtt';
         }
 
         function getMQTTBrokerConfigId(serverSpec) {
@@ -113,10 +121,10 @@
             return brokerConfigId;
         }
 
-        function createKafkaNodeSpec(serverName, channelName, operationName) {
+        function createKafkaNodeSpec(serverName, channelName, actionName) {
             return {
                 cgroup : 'node-red-rdkafka-secure',
-                type : operationName === 'subscribe' ? 'rdkafka-secure in' : 'rdkafka-secure out',
+                type : actionName === 'subscribe' ? 'rdkafka-secure in' : 'rdkafka-secure out',
 
                 broker: getKafkaBrokerConfigId(generateKafkaBootstrapServers(serverName)),
                 topic : channelName,
@@ -124,9 +132,9 @@
             };
         }
 
-        function createMQTTNodeSpec(serverSpec, channelName, operationName) {
+        function createMQTTNodeSpec(serverSpec, channelName, actionName) {
             return {
-                type : operationName === 'subscribe' ? 'mqtt in' : 'mqtt out',
+                type : actionName === 'subscribe' ? 'mqtt in' : 'mqtt out',
 
                 broker: getMQTTBrokerConfigId(serverSpec),
                 topic : channelName
@@ -137,17 +145,18 @@
             var serverName = currentAsyncApiControls.server.val();
             var channelName = currentAsyncApiControls.channel.val();
             var operationName = currentAsyncApiControls.operation.val();
+            var actionName = currentAsyncApiControls.action.val();
 
             if (serverName === COMBINE_ALL_KAFKA_BROKERS) {
-                return createKafkaNodeSpec(serverName, channelName, operationName);
+                return createKafkaNodeSpec(serverName, channelName, actionName);
             }
 
             var serverSpec = currentAsyncApiSpec.servers()[serverName];
-            if (serverSpec.protocol() === 'kafka') {
-                return createKafkaNodeSpec(serverName, channelName, operationName);
+            if (isKafka(serverSpec.protocol())) {
+                return createKafkaNodeSpec(serverName, channelName, actionName);
             }
-            else if (serverSpec.protocol() === 'mqtt') {
-                return createMQTTNodeSpec(serverSpec, channelName, operationName);
+            else if (isMQTT(serverSpec.protocol())) {
+                return createMQTTNodeSpec(serverSpec, channelName, actionName);
             }
             else {
                 console.error('Unsupported AsyncAPI protocol: ' + serverSpec.protocol());
@@ -183,8 +192,12 @@
         }
 
         function handleChannelSelection(channelname) {
-            currentAsyncApiControls['subscribe'].prop('disabled', !currentAsyncApiSpec.channels()[channelname].hasSubscribe());
-            currentAsyncApiControls['publish'].prop('disabled', !currentAsyncApiSpec.channels()[channelname].hasPublish());
+            currentAsyncApiControls.subscribe.prop('disabled', !currentAsyncApiSpec.channels()[channelname].hasSubscribe());
+            currentAsyncApiControls.publish.prop('disabled', !currentAsyncApiSpec.channels()[channelname].hasPublish());
+        }
+
+        function handleOperationSelection(operation) {
+            currentAsyncApiControls.action.val(operation);
         }
 
         function createSpecControl(type) {
@@ -223,6 +236,29 @@
 
                 currentAsyncApiControls.publish = $('<option value="publish">publish</option>');
                 currentAsyncApiControls[type].append(currentAsyncApiControls.publish);
+
+                currentAsyncApiControls[type].on('change', function () {
+                    handleOperationSelection(currentAsyncApiControls[type].val());
+                });
+            }
+            else if (type === 'action') {
+                var names = { subscribe : 'receive', publish : 'send' };
+                var serverNames = currentAsyncApiSpec.serverNames();
+                if (serverNames.length > 0) {
+                    var firstServerSpec = currentAsyncApiSpec.servers()[serverNames[0]];
+                    if (isKafka(firstServerSpec.protocol())) {
+                        names = { subscribe : 'consume', publish : 'produce' };
+                    }
+                    else if (isMQTT(firstServerSpec.protocol())) {
+                        names = { subscribe : 'subscribe', publish : 'publish' };
+                    }
+                }
+
+                currentAsyncApiControls.consume = $('<option value="subscribe">' + names.subscribe + '</option>');
+                currentAsyncApiControls[type].append(currentAsyncApiControls.consume);
+
+                currentAsyncApiControls.produce = $('<option value="publish">' + names.publish + '</option>');
+                currentAsyncApiControls[type].append(currentAsyncApiControls.produce);
             }
 
             return controlDiv;
@@ -254,6 +290,7 @@
             createSpecControl('server').appendTo(apiSpecBody);
             createSpecControl('channel').appendTo(apiSpecBody);
             createSpecControl('operation').appendTo(apiSpecBody);
+            createSpecControl('action').appendTo(apiSpecBody);
 
             if (currentAsyncApiSpec.channelNames().length > 0) {
                 handleChannelSelection(currentAsyncApiSpec.channelNames()[0]);
