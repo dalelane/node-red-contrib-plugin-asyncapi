@@ -1,8 +1,12 @@
 {
   "name": "node-red-contrib-plugin-asyncapi",
   "version": "0.0.1",
-  "description": "Creates and configures nodes based on AsyncAPI specs",
+  "description": "Creates and configures nodes based on AsyncAPI specs in Node-RED",
   "author": "Dale Lane",
+  "keywords": ["asyncapi", "nodered", "node-red"],
+  "homepage": "https://github.com/dalelane/node-red-contrib-plugin-asyncapi",
+  "bugs": "https://github.com/dalelane/node-red-contrib-plugin-asyncapi/issues",
+  "license": "Apache 2.0",
   "node-red": {
     "plugins": {
       "asyncapi-plugin": "asyncapi-plugin.html"
