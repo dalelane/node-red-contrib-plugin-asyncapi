@@ -19,14 +19,6 @@ Quick demo recording:
 
 ## How to install
 
-### Installing Node-RED
-
-Plugin support is currently only available in the beta version of Node-RED. If you don't want to wait until it's added to the main release, you can install the beta using:
-
-```
-npm install node-red@next
-```
-
 ### Installing the AsyncAPI plugin
 
 Run the following npm command in your Node-RED user directory (e.g. `~/.node-red`):

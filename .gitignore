@@ -114,3 +114,6 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# scripts copied from node_modules by postinstall script
+resources/*.js
