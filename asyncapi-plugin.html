@@ -1,4 +1,5 @@
 <script src="resources/node-red-contrib-plugin-asyncapi/asyncapi-parserjs-dist.js"></script>
+<script src="resources/node-red-contrib-plugin-asyncapi/asyncapi-avroschemaparser-dist.js"></script>
 
 <script type="text/javascript">
 
@@ -14,6 +15,8 @@
         //
         // -----------------------------------------------------------
         //
+
+        AsyncAPIParser.registerSchemaParser(AsyncAPIAvro.Parser);
 
         function fetchAsyncApiSpec() {
             return AsyncAPIParser.parseFromUrl(currentAsyncApiSpecUrl)
