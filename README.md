@@ -11,7 +11,7 @@ A plugin for generating and configuring nodes for Kafka, MQTT, AMQP, etc. automa
 
 Screenshot of current code:
 
-![screenshot](/images/screenshot.png)
+![screenshot](https://raw.githubusercontent.com/dalelane/node-red-contrib-plugin-asyncapi/master/images/screenshot.png)
 
 Quick demo recording:
 
