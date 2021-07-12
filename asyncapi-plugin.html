@@ -49,7 +49,19 @@
             }
         }
 
-        function getKafkaBrokerConfigId(bootstrap) {
+        function generateKafkaClientId(channelName, actionName) {
+            if (currentAsyncApiSpec.channels()[channelName][actionName]().hasBindings() &&
+                currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka &&
+                currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka.clientId &&
+                currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka.clientId.type === 'string' &&
+                currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka.clientId.enum &&
+                currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka.clientId.enum.length > 0)
+            {
+                return currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka.clientId.enum[0];
+            }
+        }
+
+        function getKafkaBrokerConfigId(bootstrap, channelName, actionName) {
             // check if there is already a config for this
             //  broker we can reuse before creating a new one
             var brokerConfigId;
@@ -62,7 +74,8 @@
             if (!brokerConfigId) {
                 RED.view.importNodes({
                     broker : bootstrap,
-                    type : 'kafka-broker-secure'
+                    type : 'kafka-broker-secure',
+                    clientid : generateKafkaClientId(channelName, actionName)
                 }, {
                     generateIds : true,
                     touchImport : true
@@ -70,7 +83,7 @@
                 // easiest way to find the id for the config
                 //  node we've just generated is to call this
                 //  function again
-                return getKafkaBrokerConfigId(bootstrap);
+                return getKafkaBrokerConfigId(bootstrap, channelName, actionName);
             }
 
             return brokerConfigId;
@@ -126,7 +139,7 @@
                 cgroup : 'node-red-rdkafka-secure',
                 type : actionName === 'subscribe' ? 'rdkafka-secure in' : 'rdkafka-secure out',
 
-                broker: getKafkaBrokerConfigId(generateKafkaBootstrapServers(serverName)),
+                broker: getKafkaBrokerConfigId(generateKafkaBootstrapServers(serverName), channelName, actionName),
                 topic : channelName,
                 autocommit : true
             };
