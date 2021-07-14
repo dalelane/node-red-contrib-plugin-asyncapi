@@ -27,11 +27,19 @@
                 });
         }
 
-
+        // flag to specify that a bootstrap address should be formed from
+        //  combining urls from all servers in the spec
         var COMBINE_ALL_KAFKA_BROKERS = " ( all brokers ) ";
 
         function isKafka(protocol) {
             return protocol === 'kafka' || protocol === 'kafka-secure';
+        }
+
+        function getServerName(servername) {
+            if (servername === COMBINE_ALL_KAFKA_BROKERS) {
+                return currentAsyncApiSpec.serverNames()[0];
+            }
+            return servername;
         }
 
         function generateKafkaBootstrapServers(serverName) {
@@ -61,7 +69,47 @@
             }
         }
 
-        function getKafkaBrokerConfigId(bootstrap, channelName, actionName) {
+        // maps the AsyncAPI protocol and security scheme type to the matching
+        //  Kafka security.protocol value
+        //  see https://dalelane.co.uk/blog/?p=4409 for background
+        function getKafkaSecurityProtocol(asyncapiprotocol, asyncapisecurityscheme) {
+            if (asyncapiprotocol === 'kafka') {
+                if (asyncapisecurityscheme) {
+                    return 'sasl_plaintext';
+                }
+                else {
+                    return 'plaintext';
+                }
+            }
+            else if (asyncapiprotocol === 'kafka-secure') {
+                if (!asyncapisecurityscheme || asyncapisecurityscheme === 'X509') {
+                    return 'ssl';
+                }
+                else {
+                    return 'sasl_ssl';
+                }
+            }
+        }
+
+        // maps the AsyncAPI protocol and security scheme type to the matching
+        //  Kafka sasl.mechanism value
+        //  see https://dalelane.co.uk/blog/?p=4409 for background
+        function getKafkaSaslMechanism(asyncapiprotocol, asyncapisecurityscheme) {
+            switch (asyncapisecurityscheme) {
+                case 'plain':
+                    return 'PLAIN';
+                case 'scramSha256':
+                    return 'SCRAM-SHA-256';
+                case 'scramSha512':
+                    return 'SCRAM-SHA-512';
+                case 'oauth2':
+                    return 'OAUTHBEARER';
+                case 'gssapi':
+                    return 'GSSAPI';
+            }
+        }
+
+        function getKafkaBrokerConfigId(bootstrap, channelName, actionName, asyncapiprotocol, asyncapisecurityscheme) {
             // check if there is already a config for this
             //  broker we can reuse before creating a new one
             var brokerConfigId;
@@ -73,9 +121,13 @@
 
             if (!brokerConfigId) {
                 RED.view.importNodes({
-                    broker : bootstrap,
                     type : 'kafka-broker-secure',
-                    clientid : generateKafkaClientId(channelName, actionName)
+
+                    broker : bootstrap,
+
+                    clientid : generateKafkaClientId(channelName, actionName),
+                    security_protocol : getKafkaSecurityProtocol(asyncapiprotocol, asyncapisecurityscheme),
+                    sasl_mechanism : getKafkaSaslMechanism(asyncapiprotocol, asyncapisecurityscheme)
                 }, {
                     generateIds : true,
                     touchImport : true
@@ -83,7 +135,7 @@
                 // easiest way to find the id for the config
                 //  node we've just generated is to call this
                 //  function again
-                return getKafkaBrokerConfigId(bootstrap, channelName, actionName);
+                return getKafkaBrokerConfigId(bootstrap, channelName, actionName, asyncapiprotocol, asyncapisecurityscheme);
             }
 
             return brokerConfigId;
@@ -134,13 +186,27 @@
             return brokerConfigId;
         }
 
-        function createKafkaNodeSpec(serverName, channelName, actionName) {
+        function createKafkaNodeSpec(serverName, channelName, actionName, securityName) {
+            var server = currentAsyncApiSpec.servers()[getServerName(serverName)];
+            var asyncapiprotocol = server.protocol();
+
+            var asyncapisecurityscheme;
+            if (securityName &&
+                currentAsyncApiSpec.hasComponents() &&
+                currentAsyncApiSpec.components().securitySchemes() &&
+                currentAsyncApiSpec.components().securitySchemes()[securityName])
+            {
+                asyncapisecurityscheme = currentAsyncApiSpec.components().securitySchemes()[securityName].json().type;
+            }
+
             return {
                 cgroup : 'node-red-rdkafka-secure',
                 type : actionName === 'subscribe' ? 'rdkafka-secure in' : 'rdkafka-secure out',
 
-                broker: getKafkaBrokerConfigId(generateKafkaBootstrapServers(serverName), channelName, actionName),
+                broker : getKafkaBrokerConfigId(generateKafkaBootstrapServers(serverName), channelName, actionName,
+                                                asyncapiprotocol, asyncapisecurityscheme),
                 topic : channelName,
+
                 autocommit : true
             };
         }
@@ -159,14 +225,15 @@
             var channelName = currentAsyncApiControls.channel.val();
             var operationName = currentAsyncApiControls.operation.val();
             var actionName = currentAsyncApiControls.action.val();
+            var securityName = currentAsyncApiControls.security.val();
 
             if (serverName === COMBINE_ALL_KAFKA_BROKERS) {
-                return createKafkaNodeSpec(serverName, channelName, actionName);
+                return createKafkaNodeSpec(serverName, channelName, actionName, securityName);
             }
 
             var serverSpec = currentAsyncApiSpec.servers()[serverName];
             if (isKafka(serverSpec.protocol())) {
-                return createKafkaNodeSpec(serverName, channelName, actionName);
+                return createKafkaNodeSpec(serverName, channelName, actionName, securityName);
             }
             else if (isMQTT(serverSpec.protocol())) {
                 return createMQTTNodeSpec(serverSpec, channelName, actionName);
@@ -209,6 +276,16 @@
             currentAsyncApiControls.publish.prop('disabled', !currentAsyncApiSpec.channels()[channelname].hasPublish());
         }
 
+        function handleServerSelection(servername) {
+            var security = currentAsyncApiSpec.servers()[getServerName(servername)].security();
+            if (security && security.length > 0) {
+                var securityschemenames = Object.keys(security[0].json());
+                if (securityschemenames.length > 0) {
+                    currentAsyncApiControls.security.val(securityschemenames[0]);
+                }
+            }
+        }
+
         function handleOperationSelection(operation) {
             currentAsyncApiControls.action.val(operation);
         }
@@ -222,15 +299,34 @@
 
             if (type === 'server') {
                 var allServersKafka = true;
+                var allServersKafkaSecure = true;
                 for (var servername of currentAsyncApiSpec.serverNames()) {
                     var serverSpec = currentAsyncApiSpec.servers()[servername];
                     currentAsyncApiControls[type].append('<option value="' + servername + '">' + servername + '</option>');
-                    if (serverSpec.protocol() !== 'kafka' && serverSpec.protocol() === 'kafka-secure') {
+                    if (serverSpec.protocol() !== 'kafka') {
                         allServersKafka = false;
                     }
+                    if (serverSpec.protocol() !== 'kafka-secure') {
+                        allServersKafkaSecure = false;
+                    }
                 }
-                if (allServersKafka) {
+                if (allServersKafka || allServersKafkaSecure) {
                     currentAsyncApiControls[type].prepend('<option value="' + COMBINE_ALL_KAFKA_BROKERS + '" selected=true>' + COMBINE_ALL_KAFKA_BROKERS + '</option>');
+                }
+
+                currentAsyncApiControls[type].on('change', function () {
+                    handleServerSelection(currentAsyncApiControls[type].val());
+                });
+            }
+            else if (type === 'security') {
+                currentAsyncApiControls[type].append('<option value=""></option>');
+
+                if (currentAsyncApiSpec.hasComponents() &&
+                    currentAsyncApiSpec.components().hasSecuritySchemes())
+                {
+                    for (var securityname of Object.keys(currentAsyncApiSpec.components().securitySchemes())) {
+                        currentAsyncApiControls[type].append('<option value="' + securityname + '">' + securityname + '</option>');
+                    }
                 }
             }
             else if (type === 'channel') {
@@ -303,8 +399,31 @@
             createSpecControl('server').appendTo(apiSpecBody);
             createSpecControl('channel').appendTo(apiSpecBody);
             createSpecControl('operation').appendTo(apiSpecBody);
-            createSpecControl('action').appendTo(apiSpecBody);
 
+            // create advanced options
+            var showCustomizePanel = false;
+            var advancedCustomizeHeader = $("<div>&#9654; Advanced:</div>").css({"padding-bottom": "1em", "cursor": "pointer", "color": "#777"});
+            var advancedCustomizeBody = $("<div/>").css({"background-color":"#f7f7f7","padding":"8px", "margin-top": "-1em", "margin-bottom": "1em"});
+            createSpecControl('action').appendTo(advancedCustomizeBody);
+            createSpecControl('security').appendTo(advancedCustomizeBody);
+            advancedCustomizeHeader.appendTo(apiSpecBody);
+            advancedCustomizeBody.appendTo(apiSpecBody);
+            advancedCustomizeBody.hide();
+            advancedCustomizeHeader.click(function () {
+                showCustomizePanel = !showCustomizePanel;
+                if (showCustomizePanel) {
+                    advancedCustomizeHeader.html("&#9660; Advanced:");
+                    advancedCustomizeBody.show();
+                }
+                else {
+                    advancedCustomizeHeader.html("&#9654; Advanced:");
+                    advancedCustomizeBody.hide();
+                }
+            });
+
+            if (currentAsyncApiSpec.serverNames().length > 0) {
+                handleServerSelection(currentAsyncApiControls.server.val());
+            }
             if (currentAsyncApiSpec.channelNames().length > 0) {
                 handleChannelSelection(currentAsyncApiSpec.channelNames()[0]);
             }
