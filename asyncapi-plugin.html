@@ -26,6 +26,15 @@
                     currentAsyncApiControls = {};
                 });
         }
+        function parseAsyncApiFile(filecontents) {
+            return AsyncAPIParser.parse(filecontents)
+                .then(function (result) {
+                    currentAsyncApiSpec = result;
+
+                    currentAsyncApiControls = {};
+                });
+        }
+
 
         // flag to specify that a bootstrap address should be formed from
         //  combining urls from all servers in the spec
@@ -445,6 +454,19 @@
             errorBody.html(errMessage).show();
         }
 
+        function asyncApiFileSelectHandler(evt, selectedFile) {
+            evt.stopPropagation();
+            return new Promise(function (resolve, reject) {
+                var selectedFileReader = new FileReader();
+                selectedFileReader.onload = function (loadEvent) {
+                    var fileContents = loadEvent.target.result;
+                    parseAsyncApiFile(fileContents)
+                        .then(resolve)
+                        .catch(reject);
+                };
+                selectedFileReader.readAsText(selectedFile);
+            });
+        }
 
         function createSidebarHtml() {
             var sidebarDiv = $("<div/>").css({"position":"relative","height":"100%"});
@@ -457,8 +479,12 @@
             sidebarDiv.append(sidebarHeader);
 
             var sidebarHeaderForm = $('<form class="red-ui-searchBox-form"/>');
-            var asyncApiSpecUrlInput = $('<input type="text" class="red-ui-searchBox-input" placeholder="URL for AsyncAPI specification" style="width: 100%;">');
+            var asyncApiSpecUrlInput = $('<input type="text" class="red-ui-searchBox-input" placeholder="URL for AsyncAPI specification" style="width: calc(100% - 65px);">');
             asyncApiSpecUrlInput.appendTo(sidebarHeaderForm);
+
+            var fileSelectInput = $('<input type="file" class="red-ui-button" style="width: 65px; padding: 6px 6px; line-height: 20px; font-size: 0.7em; height: 26px">');
+            var asyncApiFileInput = fileSelectInput[0];
+            fileSelectInput.appendTo(sidebarHeaderForm);
 
             sidebarHeaderForm.appendTo(sidebarHeader);
 
@@ -467,7 +493,7 @@
             //
 
             var body = $('<div style="padding: 10px"/>').appendTo(sidebarDiv);
-            var initialBody = $("<div>Provide the URL of an AsyncAPI specification file in the text box above to start generating nodes</div>");
+            var initialBody = $("<div>Provide an AsyncAPI specification file to start generating nodes by:<ul><li>Enter the URL of an AsyncAPI specification in the text box above, <strong>or</strong></li><li>Click the 'Choose file' button above and select an AsyncAPI file on your computer</li></ul></div>");
             var fetchingBody = $("<div>Fetching AsyncAPI specification...</div>").hide();
             var apiSpecBody = $("<div/>").hide();
             var errorBody = $("<div/>").hide();
@@ -481,6 +507,29 @@
             // actions
             //
 
+            function handleAsyncApiContents(getAsyncApiContentsPromise) {
+                initialBody.hide();
+                fetchingBody.show();
+                apiSpecBody.hide();
+                errorBody.hide();
+
+                getAsyncApiContentsPromise
+                    .then(function () {
+                        fetchingBody.hide();
+                        handleNewAsyncApiSpec(apiSpecBody);
+                    })
+                    .catch(function (err) {
+                        fetchingBody.hide();
+                        displayAsyncApiSpecError(errorBody, err);
+                    });
+            }
+
+            // action: user has provided a file with an AsyncAPI spec
+            asyncApiFileInput.addEventListener('change', function(evt) {
+                var selectedFile = this.files[0];
+                handleAsyncApiContents(asyncApiFileSelectHandler(evt, selectedFile));
+            }, true);
+
             // action: user provides the URL of an AsyncAPI spec
             asyncApiSpecUrlInput.on('keydown', function (e) {
                 if (// user has pressed enter
@@ -491,22 +540,7 @@
                     currentAsyncApiSpecUrl = asyncApiSpecUrlInput.val().trim();
 
                     if (currentAsyncApiSpecUrl) {
-                        initialBody.hide();
-                        fetchingBody.show();
-                        apiSpecBody.hide();
-                        errorBody.hide();
-
-                        fetchAsyncApiSpec()
-                            .then(function () {
-                                fetchingBody.hide();
-
-                                handleNewAsyncApiSpec(apiSpecBody);
-                            })
-                            .catch(function (err) {
-                                fetchingBody.hide();
-
-                                displayAsyncApiSpecError(errorBody, err);
-                            });
+                        handleAsyncApiContents(fetchAsyncApiSpec());
                     }
                     else {
                         initialBody.show();
