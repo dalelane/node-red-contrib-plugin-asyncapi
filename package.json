@@ -17,8 +17,8 @@
     }
   },
   "dependencies": {
-    "@asyncapi/avro-schema-parser": "^0.6.0",
-    "@asyncapi/parser": "1.10.2",
+    "@asyncapi/avro-schema-parser": "^1.0.1",
+    "@asyncapi/parser": "1.15.0",
     "browserify": "^17.0.0",
     "browserify-shim": "^3.8.14"
   },
