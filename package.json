@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-plugin-asyncapi",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "description": "Creates and configures nodes based on AsyncAPI specs in Node-RED",
   "author": "Dale Lane",
   "keywords": [
@@ -17,10 +17,10 @@
     }
   },
   "dependencies": {
-    "@asyncapi/avro-schema-parser": "^1.0.1",
-    "@asyncapi/parser": "1.15.0",
+    "@asyncapi/avro-schema-parser": "^1.1.0",
+    "@asyncapi/parser": "1.17.0",
     "browserify": "^17.0.0",
-    "browserify-shim": "^3.8.14"
+    "browserify-shim": "^3.8.15"
   },
   "scripts": {
     "installifnew": "[ -d './node_modules/@asyncapi' ] || npm install",

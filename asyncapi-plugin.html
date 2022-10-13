@@ -67,7 +67,8 @@
         }
 
         function generateKafkaClientId(channelName, actionName) {
-            if (currentAsyncApiSpec.channels()[channelName][actionName]().hasBindings() &&
+            if (currentAsyncApiSpec.channels()[channelName][actionName]() &&
+                currentAsyncApiSpec.channels()[channelName][actionName]().hasBindings() &&
                 currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka &&
                 currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka.clientId &&
                 currentAsyncApiSpec.channels()[channelName][actionName]().bindings().kafka.clientId.type === 'string' &&
